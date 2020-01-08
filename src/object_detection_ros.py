@@ -123,21 +123,18 @@ class Object_Detector:
 		self.sess = tf.Session(graph=detection_graph,config=config)
 
 	def zed_image_cb(self, data):
-		global image_np_global, depth_np_global, exit_signal, new_data
+#		global image_np_global, depth_np_global, exit_signal, new_data
+
 
 		# convert ros image to opencv image. copy needed in order to make array mutable.
 		image_mat = np.copy(self.bridge.imgmsg_to_cv2(data, desired_encoding="passthrough"))
 		#image_mat = np.copy(self.bridge.imgmsg_to_cv2(data, "bgr"))
 
 		image_np_global = load_image_into_numpy_array(image_mat)
-
 		image_np = np.copy(image_np_global)
 		#depth_np = np.copy(depth_np_global)
 		depth_np_global = load_depth_into_numpy_array(image_mat)
 		depth_np = np.copy(depth_np_global)
-
-
-
 
 		image_np_expanded = np.expand_dims(image_np, axis=0)
 		image_tensor = detection_graph.get_tensor_by_name('image_tensor:0')
@@ -177,7 +174,7 @@ class Object_Detector:
 		return
 
 	def zed_depth_cb(self, data):
-		global image_np_global, depth_np_global, exit_signal, new_data
+	#	global image_np_global, depth_np_global, exit_signal, new_data
 
 		# convert ros image to opencv image. copy needed in order to make array mutable.
 		depth_mat = np.copy(self.bridge.imgmsg_to_cv2(data, desired_encoding="passthrough"))	
@@ -186,48 +183,6 @@ class Object_Detector:
 
 		depth_np = np.copy(depth_np_global)
 		return
-
-# ZED image capture thread function
-def capture_thread_func(svo_filepath=None):
-	global image_np_global, depth_np_global, exit_signal, new_data
-
-	zed = sl.Camera()
-
-	# Create a InitParameters object and set configuration parameters
-	init_params = sl.InitParameters()
-	init_params.camera_resolution = sl.RESOLUTION.RESOLUTION_HD720
-	init_params.camera_fps = 30
-	init_params.depth_mode = sl.DEPTH_MODE.DEPTH_MODE_PERFORMANCE
-	init_params.coordinate_units = sl.UNIT.UNIT_METER
-	init_params.svo_real_time_mode = False
-	if svo_filepath is not None:
-		init_params.svo_input_filename = svo_filepath
-
-	# Open the camera
-	err = zed.open(init_params)
-	print(err)
-	while err != sl.ERROR_CODE.SUCCESS:
-		err = zed.open(init_params)
-		print(err)
-		sleep(1)
-
-	image_mat = sl.Mat()
-	depth_mat = sl.Mat()
-	runtime_parameters = sl.RuntimeParameters()
-
-	while not exit_signal:
-		if zed.grab(runtime_parameters) == sl.ERROR_CODE.SUCCESS:
-			zed.retrieve_image(image_mat, sl.VIEW.VIEW_LEFT, width=width, height=height)
-			zed.retrieve_measure(depth_mat, sl.MEASURE.MEASURE_XYZRGBA, width=width, height=height)
-			lock.acquire()
-			image_np_global = load_image_into_numpy_array(image_mat)
-			depth_np_global = load_depth_into_numpy_array(depth_mat)
-			new_data = True
-			lock.release()
-
-		sleep(0.01)
-
-	zed.close()
 
 
 def display_objects_distances(image_np, depth_np, num_detections, boxes_, classes_, scores_, category_index):
@@ -278,7 +233,7 @@ def display_objects_distances(image_np, depth_np, num_detections, boxes_, classe
 				y = np.median(y_vect)
 				z = np.median(z_vect)
 				
-				distance = math.sqrt(x * x + y * y + z * z)
+				distance = math.sqrt(x * x + y * y + z * z)*0.01
 
 				display_str = display_str + " " + str('% 6.2f' % distance) + " m "
 				box_to_display_str_map[box].append(display_str)
@@ -299,15 +254,6 @@ def display_objects_distances(image_np, depth_np, num_detections, boxes_, classe
 			use_normalized_coordinates=True)
 
 	return image_np
-
-
-
-def zed_depth_cb(msg):
-	global image_np_global, depth_np_global, exit_signal, new_data
-	depth_mat = np.copy(self.bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough"))
-	depth_np_global = load_depth_into_numpy_array(depth_mat)
-
-	return
 
 
 
