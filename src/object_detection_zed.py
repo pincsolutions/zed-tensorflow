@@ -38,6 +38,7 @@ def load_depth_into_numpy_array(depth):
     ar = depth.get_data()
     ar = ar[:, :, 0:4]
     (im_height, im_width, channels) = depth.get_data().shape
+
     return np.array(ar).reshape((im_height, im_width, channels)).astype(np.float32)
 
 
@@ -182,7 +183,7 @@ def main(args):
     #MODEL_NAME = 'faster_rcnn_nas_coco_2018_01_28' # Accurate but heavy
 
     # Path to frozen detection graph. This is the actual model that is used for the object detection.
-    PATH_TO_FROZEN_GRAPH = 'data/' + MODEL_NAME + '/frozen_inference_graph.pb'
+    PATH_TO_FROZEN_GRAPH = '/home/jlew/git/pincair_gpu/src/zed-tensorflow/data/' + MODEL_NAME + '/frozen_inference_graph.pb'
 
     # Check if the model is already present
     if not os.path.isfile(PATH_TO_FROZEN_GRAPH):
@@ -201,7 +202,7 @@ def main(args):
                 tar_file.extract(file, 'data/')
 
     # List of the strings that is used to add correct label for each box.
-    PATH_TO_LABELS = os.path.join('data', 'mscoco_label_map.pbtxt')
+    PATH_TO_LABELS = os.path.join('/home/jlew/git/pincair_gpu/src/zed-tensorflow/data', 'mscoco_label_map.pbtxt')
     NUM_CLASSES = 90
 
     # Start the capture thread with the ZED input

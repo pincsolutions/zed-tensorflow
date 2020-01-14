@@ -21,10 +21,11 @@ sys.path.append('/opt/ros/kinetic/lib/python2.7/dist-packages')
 import rospy
 from cv_bridge import CvBridge
 from std_msgs.msg import String , Header
-from sensor_msgs.msg import Image, PointCloud2
+from sensor_msgs.msg import Image
 from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesisWithPose
-import sensor_msgs.point_cloud2 as pc2
 
+# ZED imports
+#import pyzed.sl as sl
 
 sys.path.append('utils')
 
@@ -44,15 +45,14 @@ def load_image_into_numpy_array(image):
 
 
 def load_depth_into_numpy_array(depth):
-    #ar = depth.get_data()
-    ar = depth[:, :, 0:4]
-    (im_height, im_width, channels) = depth.shape
-    print im_height, im_width, channels
-    return np.array(ar).reshape((im_height, im_width, channels)).astype(np.float32)
+	#ar = depth.get_data()
+	ar = depth[:, :, 0:4]
+	(im_height, im_width, channels) = depth.shape
+	return np.array(ar).reshape((im_height, im_width, channels)).astype(np.float32)
 
 width = 704
 height = 416
-confidence = 0.45
+confidence = 0.35
 
 image_np_global = np.zeros([width, height, 3], dtype=np.uint8)
 depth_np_global = np.zeros([width, height, 4], dtype=np.float)
@@ -60,7 +60,7 @@ depth_np_global = np.zeros([width, height, 4], dtype=np.float)
 
 # Limit to a maximum of 40% the GPU memory usage taken by TF https://www.tensorflow.org/guide/using_gpu
 config = tf.ConfigProto()
-config.gpu_options.per_process_gpu_memory_fraction = 0.4
+config.gpu_options.per_process_gpu_memory_fraction = 0.6
 
 # What model to download and load
 #MODEL_NAME = 'ssd_mobilenet_v1_coco_2018_01_28'
@@ -70,23 +70,8 @@ MODEL_NAME = 'ssd_mobilenet_v1_fpn_shared_box_predictor_640x640_coco14_sync_2018
 #MODEL_NAME = 'faster_rcnn_nas_coco_2018_01_28' # Accurate but heavy
 
 # Path to frozen detection graph. This is the actual model that is used for the object detection.
-PATH_TO_FROZEN_GRAPH = '/home/jlew/git/pincair_gpu/src/zed-tensorflow/'+'data/' + MODEL_NAME + '/frozen_inference_graph.pb'
+PATH_TO_FROZEN_GRAPH = '/home/jlew/git/tf_models/research/object_detection/inference_graph7910/frozen_inference_graph.pb'
 
-# Check if the model is already present
-if not os.path.isfile(PATH_TO_FROZEN_GRAPH):
-	print("Downloading model " + MODEL_NAME + "...")
-
-	MODEL_FILE = MODEL_NAME + '.tar.gz'
-	MODEL_PATH = '/home/jlew/git/pincair_gpu/src/zed-tensorflow/'+'data/' + MODEL_NAME + '.tar.gz'
-	DOWNLOAD_BASE = 'http://download.tensorflow.org/models/object_detection/'
-
-	opener = urllib.request.URLopener()
-	opener.retrieve(DOWNLOAD_BASE + MODEL_FILE, MODEL_PATH)
-	tar_file = tarfile.open(MODEL_PATH)
-	for file in tar_file.getmembers():
-		file_name = os.path.basename(file.name)
-		if 'frozen_inference_graph.pb' in file_name:
-			tar_file.extract(file, 'data/')
 
 # Load a (frozen) Tensorflow model into memory.
 print("Loading model " + MODEL_NAME)
@@ -100,8 +85,8 @@ with detection_graph.as_default():
 
 
 # List of the strings that is used to add correct label for each b
-PATH_TO_LABELS = os.path.join('/home/jlew/git/pincair_gpu/src/zed-tensorflow/data', 'mscoco_label_map.pbtxt')
-NUM_CLASSES = 90
+PATH_TO_LABELS = os.path.join('/home/jlew/git/raccoon_dataset', 'modex_label_map.pbtxt')
+NUM_CLASSES = 1
 
 # Loading label map
 label_map = label_map_util.load_labelmap(PATH_TO_LABELS)
@@ -117,8 +102,8 @@ class Object_Detector:
 		self.image_pub = rospy.Publisher("/OD_image",Image, queue_size=1)
 		self.object_pub = rospy.Publisher("objects",Detection2DArray, queue_size=1)
 		self.bridge = CvBridge()
-		self.image_sub = rospy.Subscriber("/zed2/right/image_rect_color", Image, self.zed_image_cb, queue_size=1)
-		self.depth_sub = rospy.Subscriber('/zed2/point_cloud/cloud_registered', PointCloud2, self.zed_depth_cb, queue_size=1)
+		self.image_sub = rospy.Subscriber("/zed1/right/image_rect_color", Image, self.zed_image_cb, queue_size=1)
+		self.depth_sub = rospy.Subscriber('/zed1/point_cloud/cloud_registered', Image, self.zed_depth_cb, queue_size=1)
 		self.sess = tf.Session(graph=detection_graph,config=config)
 		self.depth_np = np.zeros([width, height, 4], dtype=np.float)
 
@@ -164,14 +149,14 @@ class Object_Detector:
 						np.squeeze(scores),
 						category_index)
 
-		cv2.imshow('ZED object detection', cv2.resize(image_np, (width, height)))
+		#cv2.imshow('ZED object detection', cv2.resize(image_np, (width, height)))
 		image_msg = self.bridge.cv2_to_imgmsg(image_np,encoding="bgr8")
 		self.image_pub.publish(image_msg)
 
 		if cv2.waitKey(10) & 0xFF == ord('q'):
 			cv2.destroyAllWindows()
 		else:
-			sleep(0.01)
+			sleep(0.3)
 		'''	
 		objArray = Detection2DArray()
 
@@ -219,11 +204,11 @@ class Object_Detector:
 		return obj
 		'''
 	
-	def zed_depth_cb(self, depth_mat):
+	def zed_depth_cb(self, data):
 		#global image_np_global, depth_np_global
 
 		# convert ros image to opencv image. copy needed in order to make array mutable.
-		#depth_mat = np.copy(self.bridge.imgmsg_to_cv2(data, desired_encoding="passthrough"))	
+		depth_mat = np.copy(self.bridge.imgmsg_to_cv2(data, desired_encoding="passthrough"))	
 		print "depth_mat.shape: ", depth_mat.shape
 		depth_np_global = load_depth_into_numpy_array(depth_mat)
 
