@@ -22,6 +22,8 @@ import rospy
 from cv_bridge import CvBridge
 from std_msgs.msg import String , Header
 from sensor_msgs.msg import Image
+from sensor_msgs.msg import PointCloud2, PointField
+import sensor_msgs.point_cloud2 as pc2
 from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesisWithPose
 
 # ZED imports
@@ -50,8 +52,8 @@ def load_depth_into_numpy_array(depth):
 	(im_height, im_width, channels) = depth.shape
 	return np.array(ar).reshape((im_height, im_width, channels)).astype(np.float32)
 
-width =  704
-height = 416
+width = 320 # 704
+height = 180 #416
 confidence = 0.35
 
 image_np_global = np.zeros([width, height, 3], dtype=np.uint8)
@@ -103,13 +105,11 @@ class Object_Detector:
 		self.object_pub = rospy.Publisher("objects",Detection2DArray, queue_size=1)
 		self.bridge = CvBridge()
 		self.image_sub = rospy.Subscriber("/zed1/right/image_rect_color", Image, self.zed_image_cb, queue_size=1)
-		self.depth_sub = rospy.Subscriber('/zed1/point_cloud/cloud_registered', Image, self.zed_depth_cb, queue_size=1)
+		self.depth_sub = rospy.Subscriber('/zed1/point_cloud/cloud_registered', PointCloud2, self.zed_depth_cb, queue_size=1)
 		self.sess = tf.Session(graph=detection_graph,config=config)
-		self.depth_np = np.zeros([width, height, 4], dtype=np.float)
+		#self.depth_np = np.zeros([width, height, 4], dtype=np.float)
 
 	def zed_image_cb(self, data):
-#		global image_np_global, depth_np_global, exit_signal, new_data
-
 
 		# convert ros image to opencv image. copy needed in order to make array mutable.
 		image_mat = np.copy(self.bridge.imgmsg_to_cv2(data, desired_encoding="passthrough"))
@@ -140,7 +140,7 @@ class Object_Detector:
 		num_detections_ = num_detections.astype(int)[0]
 
 		# Visualization of the results of a detection.
-		image_np = display_objects_distances(
+		image_np = self.display_objects_distances(
 						image_np,
 						self.depth_np,
 						num_detections_,
@@ -149,14 +149,14 @@ class Object_Detector:
 						np.squeeze(scores),
 						category_index)
 
-		cv2.imshow('ZED object detection', cv2.resize(image_np, (width, height)))
+		cv2.imshow('ZED object detection', cv2.resize(image_np, (width*3, height*3)))
 		image_msg = self.bridge.cv2_to_imgmsg(image_np,encoding="bgr8")
 		self.image_pub.publish(image_msg)
 
 		if cv2.waitKey(10) & 0xFF == ord('q'):
 			cv2.destroyAllWindows()
 		else:
-			sleep(0.3)
+			sleep(0.01)
 		'''	
 		objArray = Detection2DArray()
 
@@ -205,88 +205,111 @@ class Object_Detector:
 		'''
 	
 	def zed_depth_cb(self, data):
-		#global image_np_global, depth_np_global
 
 		# convert ros image to opencv image. copy needed in order to make array mutable.
-		depth_mat = np.copy(self.bridge.imgmsg_to_cv2(data, desired_encoding="passthrough"))	
-		print "depth_mat.shape: ", depth_mat.shape
-		depth_np_global = load_depth_into_numpy_array(depth_mat)
+		#depth_mat = np.copy(self.bridge.imgmsg_to_cv2(data, desired_encoding="passthrough"))	
+		#depth_mat = data
+		#print "depth_mat.shape: ", depth_mat.width, depth_mat.height
+		#depth_np_global = load_depth_into_numpy_array(depth_mat)
 
-		self.depth_np = np.copy(depth_np_global)
+		#self.depth_np = np.copy(depth_np_global)
+		self.depth_np = data
 		return
 
 
-def display_objects_distances(image_np, depth_np, num_detections, boxes_, classes_, scores_, category_index):
-	box_to_display_str_map = collections.defaultdict(list)
-	box_to_color_map = collections.defaultdict(str)
+	def read_depth(self,width, height, data):
+		#print "height,data.height, width, data.width: ", height, data.height, width, data.width
+		if (height >= data.height) or (width >= data.width):
+			return -1
 
-	research_distance_box = 30
+		data_output = pc2.read_points(data, field_names=("x","y","z"), skip_nans=False, uvs=[[width, height]])
+		int_data = next(data_output)
+		#rospy.loginfo("int_data" + str(int_data))
+		return int_data
+	
 
-	for i in range(num_detections):
-		if scores_[i] > confidence:
-			box = tuple(boxes_[i].tolist())
-			if classes_[i] in category_index.keys():
-				class_name = category_index[classes_[i]]['name']
-			display_str = str(class_name)
-			if not display_str:
-				display_str = '{}%'.format(int(100 * scores_[i]))
-			else:
-				display_str = '{}: {}%'.format(display_str, int(100 * scores_[i]))
 
-			# Find object distance
+	def display_objects_distances(self, image_np, depth_jae, num_detections, boxes_, classes_, scores_, category_index):
+		box_to_display_str_map = collections.defaultdict(list)
+		box_to_color_map = collections.defaultdict(str)
+
+		research_distance_box = 30
+
+		for i in range(num_detections):
+			if scores_[i] > confidence:
+				box = tuple(boxes_[i].tolist())
+				if classes_[i] in category_index.keys():
+					class_name = category_index[classes_[i]]['name']
+				display_str = str(class_name)
+				if not display_str:
+					display_str = '{}%'.format(int(100 * scores_[i]))
+				else:
+					display_str = '{}: {}%'.format(display_str, int(100 * scores_[i]))
+
+				# Find object distance
+				ymin, xmin, ymax, xmax = box
+				#print xmin, xmax, ymin,ymax
+				x_center = int(xmin * width + (xmax - xmin) * width * 0.5)
+				y_center = int(ymin * height + (ymax - ymin) * height * 0.5)
+				x_vect = []
+				y_vect = []
+				z_vect = []
+
+				min_y_r = max(int(ymin * height), int(y_center - research_distance_box))
+				min_x_r = max(int(xmin * width), int(x_center - research_distance_box))
+				max_y_r = min(int(ymax * height), int(y_center + research_distance_box))
+				max_x_r = min(int(xmax * width), int(x_center + research_distance_box))
+
+				if min_y_r < 0: min_y_r = 0
+				if min_x_r < 0: min_x_r = 0
+				if max_y_r > height: max_y_r = height
+				if max_x_r > width: max_x_r = width
+
+				#print "x", min_x_r, max_x_r
+				#print "y", min_y_r, max_y_r
+				for j_ in range(min_y_r, max_y_r):
+					for i_ in range(min_x_r, max_x_r):
+						#z = depth_np[j_, i_, 2]
+						z = self.read_depth(j_, i_, depth_jae)
+						#print "z",z[1]
+						if not np.isnan(z[1]) and not np.isinf(z[1]):
+							x_vect.append(z[0])
+							y_vect.append(z[2])
+							z_vect.append(z[1])
+
+				if len(x_vect) > 0:
+					#print "x_vect: ", x_vect
+					#x = np.median(x_vect)
+					#print "y_vect: ", y_vect
+					#y = np.median(y_vect)
+					
+					z = np.median(z_vect)
+					print "\n z =",z
+					print " zmax = ", np.max(z_vect)
+					print " zmin = ", np.min(z_vect)
+					#print " z_vect: ", z_vect
+					#distance = math.sqrt(x * x + y * y + z * z)
+					distance = z
+
+					display_str = display_str + " " + str('% 6.2f' % distance) + " m "
+					box_to_display_str_map[box].append(display_str)
+					box_to_color_map[box] = vis_util.STANDARD_COLORS[classes_[i] % len(vis_util.STANDARD_COLORS)]
+
+		for box, color in box_to_color_map.items():
 			ymin, xmin, ymax, xmax = box
-			x_center = int(xmin * width + (xmax - xmin) * width * 0.5)
-			y_center = int(ymin * height + (ymax - ymin) * height * 0.5)
-			x_vect = []
-			y_vect = []
-			z_vect = []
 
-			min_y_r = max(int(ymin * height), int(y_center - research_distance_box))
-			min_x_r = max(int(xmin * width), int(x_center - research_distance_box))
-			max_y_r = min(int(ymax * height), int(y_center + research_distance_box))
-			max_x_r = min(int(xmax * width), int(x_center + research_distance_box))
+			vis_util.draw_bounding_box_on_image_array(
+				image_np,
+				ymin,
+				xmin,
+				ymax,
+				xmax,
+				color=color,
+				thickness=4,
+				display_str_list=box_to_display_str_map[box],
+				use_normalized_coordinates=True)
 
-			if min_y_r < 0: min_y_r = 0
-			if min_x_r < 0: min_x_r = 0
-			if max_y_r > height: max_y_r = height
-			if max_x_r > width: max_x_r = width
-
-			print min_x_r, max_x_r
-			print min_y_r, max_y_r
-			for j_ in range(min_y_r, max_y_r):
-				for i_ in range(min_x_r, max_x_r):
-					z = depth_np[j_, i_, 2]
-					if not np.isnan(z) and not np.isinf(z):
-						x_vect.append(depth_np[j_, i_, 0])
-						y_vect.append(depth_np[j_, i_, 1])
-						z_vect.append(z)
-
-			if len(x_vect) > 0:
-				x = np.median(x_vect)
-				y = np.median(y_vect)
-				z = np.median(z_vect)
-				
-				distance = math.sqrt(x * x + y * y + z * z)
-
-				display_str = display_str + " " + str('% 6.2f' % distance) + " m "
-				box_to_display_str_map[box].append(display_str)
-				box_to_color_map[box] = vis_util.STANDARD_COLORS[classes_[i] % len(vis_util.STANDARD_COLORS)]
-
-	for box, color in box_to_color_map.items():
-		ymin, xmin, ymax, xmax = box
-
-		vis_util.draw_bounding_box_on_image_array(
-			image_np,
-			ymin,
-			xmin,
-			ymax,
-			xmax,
-			color=color,
-			thickness=4,
-			display_str_list=box_to_display_str_map[box],
-			use_normalized_coordinates=True)
-
-	return image_np
+		return image_np
 
 
 
