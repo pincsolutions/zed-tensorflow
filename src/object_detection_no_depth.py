@@ -54,7 +54,7 @@ def load_depth_into_numpy_array(depth):
 
 width = 320 # 704
 height = 180 #416
-confidence = 0.35
+confidence = 0.815
 
 image_np_global = np.zeros([width, height, 3], dtype=np.uint8)
 depth_np_global = np.zeros([width, height, 4], dtype=np.float)
@@ -104,7 +104,7 @@ class Object_Detector:
 		self.image_pub = rospy.Publisher("/OD_image",Image, queue_size=1)
 		self.object_pub = rospy.Publisher("objects",Detection2DArray, queue_size=1)
 		self.bridge = CvBridge()
-		self.image_sub = rospy.Subscriber("/zed1/right/image_rect_color", Image, self.zed_image_cb, queue_size=1)
+		self.image_sub = rospy.Subscriber("/zed1/right/image_rect_color_f", Image, self.zed_image_cb, queue_size=1)
 		self.depth_sub = rospy.Subscriber('/zed1/point_cloud/cloud_registered', PointCloud2, self.zed_depth_cb, queue_size=1)
 		self.sess = tf.Session(graph=detection_graph,config=config)
 		#self.depth_np = np.zeros([width, height, 4], dtype=np.float)
@@ -149,7 +149,7 @@ class Object_Detector:
 						np.squeeze(scores),
 						category_index)
 
-		cv2.imshow('ZED object detection', cv2.resize(image_np, (width*3, height*3)))
+		#cv2.imshow('ZED object detection', cv2.resize(image_np, (width*3, height*3)))
 		image_msg = self.bridge.cv2_to_imgmsg(image_np,encoding="bgr8")
 		self.image_pub.publish(image_msg)
 
@@ -267,34 +267,35 @@ class Object_Detector:
 
 				#print "x", min_x_r, max_x_r
 				#print "y", min_y_r, max_y_r
-				for j_ in range(min_y_r, max_y_r):
-					for i_ in range(min_x_r, max_x_r):
-						#z = depth_np[j_, i_, 2]
-						z = self.read_depth(j_, i_, depth_jae)
-						print "\nz",z[1],np.isnan(z[1])
+				# for j_ in range(min_y_r, max_y_r):
+				# 	for i_ in range(min_x_r, max_x_r):
+				# 		#z = depth_np[j_, i_, 2]
+				# 		z = self.read_depth(j_, i_, depth_jae)
+				# 		print "\nz",z[1],np.isnan(z[1])
 
-						if not np.isnan(z[1]):
-							x_vect.append(z[0])
-							y_vect.append(z[2])
-							z_vect.append(z[1])
+				# 		if not np.isnan(z[1]):
+				# 			x_vect.append(z[0])
+				# 			y_vect.append(z[2])
+				# 			z_vect.append(z[1])
 
-				if len(x_vect) > 0:
-					#print "x_vect: ", x_vect
-					#x = np.median(x_vect)
-					#print "y_vect: ", y_vect
-					#y = np.median(y_vect)
+				# if len(x_vect) > 0:
+				# 	#print "x_vect: ", x_vect
+				# 	#x = np.median(x_vect)
+				# 	#print "y_vect: ", y_vect
+				# 	#y = np.median(y_vect)
 					
-					z = np.median(z_vect)
-					print "\n z =",z
-					print " zmax = ", np.max(z_vect)
-					print " zmin = ", np.min(z_vect)
-					#print " z_vect: ", z_vect
-					#distance = math.sqrt(x * x + y * y + z * z)
-					distance = z
+				# 	z = np.median(z_vect)
+				# 	print "\n z =",z
+				# 	print " zmax = ", np.max(z_vect)
+				# 	print " zmin = ", np.min(z_vect)
+				# 	#print " z_vect: ", z_vect
+				# 	#distance = math.sqrt(x * x + y * y + z * z)
+				# 	distance = z
 
-					display_str = display_str + " " + str('% 6.2f' % distance) + " m "
-					box_to_display_str_map[box].append(display_str)
-					box_to_color_map[box] = vis_util.STANDARD_COLORS[classes_[i] % len(vis_util.STANDARD_COLORS)]
+				#   display_str = display_str + " " + str('% 6.2f' % distance) + " m "
+				#display_str = " "
+				box_to_display_str_map[box].append(display_str)
+				box_to_color_map[box] = vis_util.STANDARD_COLORS[classes_[i] % len(vis_util.STANDARD_COLORS)]
 
 		for box, color in box_to_color_map.items():
 			ymin, xmin, ymax, xmax = box
