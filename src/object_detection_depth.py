@@ -54,7 +54,7 @@ def load_depth_into_numpy_array(depth):
 
 width = 320 # 704
 height = 180 #416
-confidence = 0.56
+confidence = 0.5
 
 image_np_global = np.zeros([width, height, 3], dtype=np.uint8)
 depth_np_global = np.zeros([width, height, 4], dtype=np.float)
@@ -62,7 +62,7 @@ depth_np_global = np.zeros([width, height, 4], dtype=np.float)
 
 # Limit to a maximum of 40% the GPU memory usage taken by TF https://www.tensorflow.org/guide/using_gpu
 config = tf.ConfigProto()
-config.gpu_options.per_process_gpu_memory_fraction = 0.8
+config.gpu_options.per_process_gpu_memory_fraction = 0.6
 
 # What model to download and load
 #MODEL_NAME = 'ssd_mobilenet_v1_coco_2018_01_28'
@@ -75,7 +75,8 @@ config.gpu_options.per_process_gpu_memory_fraction = 0.8
 #PATH_TO_FROZEN_GRAPH = '/home/jlew/git/tf_models/research/object_detection/inference_graph7910/frozen_inference_graph.pb'
 #PATH_TO_FROZEN_GRAPH = '/home/jlew/git/tf_models/research/object_detection/jae_inference_graph5811/frozen_inference_graph.pb'
 #PATH_TO_FROZEN_GRAPH = '/home/jlew/git/tf_models/research/object_detection/jae_inference_graph6102/frozen_inference_graph.pb' # aspect ratio 1:1
-PATH_TO_FROZEN_GRAPH = '/home/jlew/git/tf_models/research/object_detection/jae_inference_graph10193/frozen_inference_graph.pb' # aspect ratio 1:1
+#PATH_TO_FROZEN_GRAPH = '/home/jlew/git/tf_models/research/object_detection/jae_inference_graph10193/frozen_inference_graph.pb' # aspect ratio 1:1
+PATH_TO_FROZEN_GRAPH = '/home/jlew/git/tf_models/research/object_detection/jae_inference_graph18318/frozen_inference_graph.pb' # aspect ratio 1:1
 # Load a (frozen) Tensorflow model into memory.
 #print("Loading model " + MODEL_NAME)
 detection_graph = tf.Graph()
@@ -150,7 +151,7 @@ class Object_Detector:
 						np.squeeze(scores),
 						category_index)
 
-		#cv2.imshow('ZED object detection', cv2.resize(image_np, (width*3, height*3)))
+		# cv2.imshow('ZED object detection', cv2.resize(image_np, (width*3, height*3)))
 		image_msg = self.bridge.cv2_to_imgmsg(image_np,encoding="bgr8")
 		image_msg.header.frame_id = 'map'
 		self.image_pub.publish(image_msg)
@@ -208,20 +209,13 @@ class Object_Detector:
 	
 	def zed_depth_cb(self, data):
 
-		# convert ros image to opencv image. copy needed in order to make array mutable.
-		#depth_mat = np.copy(self.bridge.imgmsg_to_cv2(data, desired_encoding="passthrough"))	
-		#depth_mat = data
-		#print "depth_mat.shape: ", depth_mat.width, depth_mat.height
-		#depth_np_global = load_depth_into_numpy_array(depth_mat)
-
-		#self.depth_np = np.copy(depth_np_global)
 		self.depth_np = data
 		return
 
 
 	def read_depth(self,width, height, data):
-		#print "height,data.height, width, data.width: ", height, data.height, width, data.width
 		if (height >= data.height) or (width >= data.width):
+			print "data: ",data.width, data.height
 			return -1
 
 		data_output = pc2.read_points(data, field_names=("x","y","z"), skip_nans=False, uvs=[[width, height]])
@@ -235,7 +229,7 @@ class Object_Detector:
 		box_to_display_str_map = collections.defaultdict(list)
 		box_to_color_map = collections.defaultdict(str)
 
-		research_distance_box = 30
+		research_distance_box = 20
 
 		for i in range(num_detections):
 			if scores_[i] > confidence:
@@ -243,10 +237,10 @@ class Object_Detector:
 				if classes_[i] in category_index.keys():
 					class_name = category_index[classes_[i]]['name']
 				display_str = str(class_name)
-				if not display_str:
-					display_str = '{}%'.format(int(100 * scores_[i]))
-				else:
-					display_str = '{}: {}%'.format(display_str, int(100 * scores_[i]))
+				# if not display_str:
+				# 	display_str = '{}%'.format(int(100 * scores_[i]))
+				# else:
+				# 	display_str = '{}: {}%'.format(display_str, int(100 * scores_[i]))
 
 				# Find object distance
 				ymin, xmin, ymax, xmax = box
@@ -269,24 +263,23 @@ class Object_Detector:
 
 				#print "x", min_x_r, max_x_r
 				#print "y", min_y_r, max_y_r
-				# for j_ in range(min_y_r, max_y_r):
-				# 	for i_ in range(min_x_r, max_x_r):
+				for j_ in range(min_y_r, max_y_r):
+					for i_ in range(min_x_r, max_x_r):
 				# 		#z = depth_np[j_, i_, 2]
-				# 		z = self.read_depth(j_, i_, depth_jae)
-				# 		print "\nz",z[1],np.isnan(z[1])
-
-				# 		if not np.isnan(z[1]):
-				# 			x_vect.append(z[0])
-				# 			y_vect.append(z[2])
-				# 			z_vect.append(z[1])
-
-				# if len(x_vect) > 0:
+						xyz = self.read_depth(i_, j_, depth_jae)
+						if xyz != -1 and not np.isnan(xyz[1]):
+								x_vect.append(xyz[1])
+								y_vect.append(-xyz[0])
+								z_vect.append(xyz[2])
+								#print "xyz: ",xyz
+							
+				if len(x_vect) > 0:
 				# 	#print "x_vect: ", x_vect
-				# 	#x = np.median(x_vect)
+					x = np.median(x_vect)
 				# 	#print "y_vect: ", y_vect
-				# 	#y = np.median(y_vect)
+					y = np.median(y_vect)
 					
-				# 	z = np.median(z_vect)
+					z = np.median(z_vect)
 				# 	print "\n z =",z
 				# 	print " zmax = ", np.max(z_vect)
 				# 	print " zmin = ", np.min(z_vect)
@@ -294,7 +287,8 @@ class Object_Detector:
 				# 	#distance = math.sqrt(x * x + y * y + z * z)
 				# 	distance = z
 
-				#   display_str = display_str + " " + str('% 6.2f' % distance) + " m "
+					display_str = display_str + ": " + str('%2.1f, %2.1f, %2.1f' %(x,y,z)) + " m"
+
 				#display_str = " "
 				box_to_display_str_map[box].append(display_str)
 				box_to_color_map[box] = vis_util.STANDARD_COLORS[classes_[i] % len(vis_util.STANDARD_COLORS)]
@@ -322,7 +316,7 @@ def main(args):
 	
 	obj=Object_Detector()
 	
-	os.system('echo -ne "\033]0;OCCUPANCY PERCENTAGE\007"')
+	#os.system('echo -ne "\033]0;OCCUPANCY PERCENTAGE\007"')
 	try:
 		rospy.spin()
 	except KeyboardInterrupt:
