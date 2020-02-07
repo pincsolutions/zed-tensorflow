@@ -23,7 +23,7 @@
 		
 		<param name="height_map" value="false" />
 		<param name="depth_map" value="true"  />
-		<param name="color_factor" value ="1.2"  />
+		<param name="color_factor" value ="1.4"  />
 
 		<!-- maximum range to integrate (speedup!) -->
 		<param name="sensor_model/max_range" value="2.1" />
