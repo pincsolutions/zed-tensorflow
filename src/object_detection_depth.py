@@ -54,7 +54,7 @@ def load_depth_into_numpy_array(depth):
 
 width = 320 # 704
 height = 180 #416
-confidence = 0.5
+confidence = 0.55
 
 image_np_global = np.zeros([width, height, 3], dtype=np.uint8)
 depth_np_global = np.zeros([width, height, 4], dtype=np.float)
