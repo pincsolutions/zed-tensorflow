@@ -25,10 +25,10 @@ from sensor_msgs.msg import Image
 from sensor_msgs.msg import PointCloud2, PointField
 import sensor_msgs.point_cloud2 as pc2
 from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesisWithPose
+from pincair_msgs.msg import DetectedBox
 
 # ZED imports
 #import pyzed.sl as sl
-
 sys.path.append('utils')
 
 # ## Object detection imports
@@ -38,7 +38,7 @@ from object_detection.utils import visualization_utils as vis_util
 
 
 def load_image_into_numpy_array(image):
-	#ar = image.get_data()
+	#ar = image.get_dataVis
 	#ar = image
 	ar = image[:, :, 0:3]
 	##(im_height, im_width, channels) = image.get_data().shape
@@ -105,6 +105,7 @@ class Object_Detector:
 	def __init__(self):
 		self.image_pub = rospy.Publisher("/OD_image",Image, queue_size=1)
 		self.object_pub = rospy.Publisher("/objects",Detection2DArray, queue_size=1)
+		self.box_pub = rospy.Publisher("/detected_box",DetectedBox,queue_size=1)
 
 		self.bridge = CvBridge()
 		self.image_sub = rospy.Subscriber("/zed1/right/image_rect_color_f", Image, self.zed_image_cb, queue_size=1)
@@ -151,7 +152,6 @@ class Object_Detector:
 
 		# cv2.imshow('ZED object detection', cv2.resize(image_np, (width*3, height*3)))
 		image_msg = self.bridge.cv2_to_imgmsg(image_np,encoding="bgr8")
-		image_msg.header.frame_id = 'map'
 		self.image_pub.publish(image_msg)
 
 		if cv2.waitKey(10) & 0xFF == ord('q'):
@@ -288,8 +288,13 @@ class Object_Detector:
 					display_str = display_str + ": " + str('%2.1f, %2.1f, %2.1f' %(x,y,z)) + " m"
 
 				#display_str = " "
+
 				box_to_display_str_map[box].append(display_str)
 				box_to_color_map[box] = vis_util.STANDARD_COLORS[classes_[i] % len(vis_util.STANDARD_COLORS)]
+				h = (xmax - xmin)*width/x/56.
+				w = (ymax - ymin)*height/x/56.
+
+				self.box_pub.publish([x,y,z,w,h])
 
 		for box, color in box_to_color_map.items():
 			ymin, xmin, ymax, xmax = box
@@ -310,7 +315,7 @@ class Object_Detector:
 
 
 def main(args):
-	rospy.init_node('object_detector_node')
+	rospy.init_node('box_detector_node')
 	
 	obj=Object_Detector()
 	
